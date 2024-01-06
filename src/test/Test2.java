@@ -2,13 +2,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class Tester {
+public class Test2 {
 
     @Test
-    public void Test1(){
-        assertEquals(3, 4);
+    public void Test2(){
+        assertEquals(5, 4);
     }
 
 
-   
+
 }
