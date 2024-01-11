@@ -59,7 +59,7 @@ pipeline {
                         echo "GIT_URL no está definido."
                     }
                     
-                   withCredentials([usernamePassword(credentialsId: 'f06916e3-ef72-402c-9169-f62484ec5de2', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]){
+                   withCredentials([usernamePassword(credentialsId: 'TestingID', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]){
                         // Extraer líneas relevantes
                         def rawOutput = sh(script: "grep -E '<testcase|<failure' reports/*.xml", returnStdout: true).trim()
                         echo "Raw Output: ${rawOutput}"
