@@ -1,6 +1,10 @@
 
 pipeline {
     agent any
+
+     environment {
+        SONARQUBE_SCANNER = 'SonarJenkins'
+    }
     
     stages {
         stage('node') {
@@ -17,14 +21,24 @@ pipeline {
                 sh 'cd lib/ ; wget https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.7.0/junit-platform-console-standalone-1.7.0-all.jar'
                 sh 'find $WORKSPACE/src/* -name "*.java" > $WORKSPACE/sources.txt'
                 //sh 'cat $WORKSPACE/sources.txt'
-                sh 'javac -cp "$WORKSPACE/lib/junit-platform-console-standalone-1.7.0-all.jar" @$WORKSPACE/sources.txt 2> errores.log'
+                sh 'javac -d $WORKSPACE/bin -cp "$WORKSPACE/lib/junit-platform-console-standalone-1.7.0-all.jar" @$WORKSPACE/sources.txt 2> errores.log'
             }
         }
 
+         stage('SonarQube analysis') {
+            steps {
+                script {
+                  def scannerHome = tool 'SonarScanner'
+                 withSonarQubeEnv(SONARQUBE_SCANNER) { // If you have configured more than one global server connection, you can specify its name
+                     sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=test -Dsonar.java.binaries=$WORKSPACE/bin"
+                }
+                }
+            }
+         }
         stage('Test') {
     steps {
         script {
-            def classpath = sh(script: "find src/ -type f \\( -name '*.class' -o -name '*.jar' \\) | sed 's|/[^/]*\$||' | sort -u | tr '\\n' ':'", returnStdout: true).trim()
+            def classpath = sh(script: "find bin/ lib/ -type f \\( -name '*.class' -o -name '*.jar' \\) | sed 's|/[^/]*\$||' | sort -u | tr '\\n' ':'", returnStdout: true).trim()
             echo "Running tests with classpath: $classpath"
             sh "java -jar lib/junit-platform-console-standalone-1.7.0-all.jar -cp \"$classpath\" --scan-classpath --reports-dir=reports"
             junit '**/reports/*.xml'
