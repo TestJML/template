@@ -49,6 +49,65 @@ pipeline {
     }
 
      post {
+    always {
+        script {
+            // Asumimos que el análisis de SonarQube ya se completó anteriormente en el pipeline
+            def sonarProjectKey = 'test' // Asegúrate de usar el key correcto de tu proyecto
+            def sonarHostUrl = 'http://localhost:9000' // Ajusta esto a la URL de tu SonarQube
+            def repoUrl = env.GIT_URL ?: ''
+            def user = ''
+            def repo = ''
+                    if (repoUrl) {
+                        def pattern = ~/https:\/\/github\.com\/([^\/]+)\/([^\.]+)\.git/
+                        def matcher = pattern.matcher(repoUrl)
+                            if (matcher.matches()) {
+                                user = matcher.group(1)
+                                repo = matcher.group(2)
+                   
+                        } else {
+                            echo "No se pudo extraer la información del repositorio."
+                        }
+                    } else {
+                        echo "GIT_URL no está definido."
+                    }
+            withCredentials([string(credentialsId: '6956b76d-aef1-488e-8b4f-a439bf3f07cc', variable: 'SONAR_TOKEN')]) {
+                // Consulta la API de SonarQube para obtener el estado del quality gate
+                def qualityGateResult = sh(script: "curl -u $SONAR_TOKEN: '${sonarHostUrl}/api/qualitygates/project_status?projectKey=${sonarProjectKey}'", returnStdout: true).trim()
+                def parsedQGResult = readJSON text: qualityGateResult
+                def status = parsedQGResult.projectStatus.status
+                
+            // Consulta adicional para detalles de issues
+            def issuesResult = sh(script: "curl -u $SONAR_TOKEN: '${sonarHostUrl}/api/issues/search?projectKeys=${sonarProjectKey}&statuses=OPEN,REOPENED&types=BUG,VULNERABILITY,CODE_SMELL'", returnStdout: true).trim()
+            def parsedIssuesResult = readJSON text: issuesResult
+            def totalIssues = parsedIssuesResult.total
+            def bugs = parsedIssuesResult.issues.findAll { it.type == 'BUG' }.size()
+            def vulnerabilities = parsedIssuesResult.issues.findAll { it.type == 'VULNERABILITY' }.size()
+            def codeSmells = parsedIssuesResult.issues.findAll { it.type == 'CODE_SMELL' }.size()
+
+            // Preparando el mensaje del issue con detalles del análisis
+            def issueBody = """
+            El análisis de SonarQube para el proyecto '${sonarProjectKey}' ha completado. Estado del Quality Gate: ${status}.
+            Resumen de issues:
+            - Total Issues: ${totalIssues}
+            - Bugs: ${bugs}
+            - Vulnerabilidades: ${vulnerabilities}
+            - Code Smells: ${codeSmells}
+            Por favor, revisa los detalles en SonarQube.
+            """
+                def issueTitle = "Análisis de SonarQube completado con estado: ${status}"
+                 echo "HOLA6"
+                withCredentials([usernamePassword(credentialsId: 'TestingID', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                    def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: issueBody, labels: ["sonarqube"]])
+                    echo "jsonBody content: ${jsonBody}"
+                    sh """
+                        curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
+                            -d '${jsonBody}' \
+                            https://api.github.com/repos/${user}/${repo}/issues
+                        """
+                }
+            }
+        }
+    }
         failure {
             script {
                 def reportFiles = findFiles(glob: 'reports/*.xml')
@@ -90,7 +149,7 @@ pipeline {
                                 if (currentTestName) {
                                     testsFallidos << "${currentTestName}: ${message}"
                                 }
-                                currentTestName = "" // Reset current test name after capturing failure message
+                                currentTestName = "" 
                             }
                         }
                         //echo "Tests Fallidos: ${testsFallidos.join('\n')}"
@@ -98,7 +157,7 @@ pipeline {
                         def issueTitle = "Error encontrado en Jenkins"
                         def issueBody = "Se encontraron los siguientes errores durante la ejecución:\n```\n${testsFallidos.join('\n')}\n```"
     
-                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: issueBody])
+                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: issueBody, labels: ["bug"]])
     
                         sh """
                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
