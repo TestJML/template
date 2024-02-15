@@ -72,6 +72,7 @@ pipeline {
                     }
             withCredentials([string(credentialsId: '6956b76d-aef1-488e-8b4f-a439bf3f07cc', variable: 'SONAR_TOKEN')]) {
                 // Consulta la API de SonarQube para obtener el estado del quality gate
+                def taskId = waitForQualityGate()
                 def qualityGateResult = sh(script: "curl -u $SONAR_TOKEN: '${sonarHostUrl}/api/qualitygates/project_status?projectKey=${sonarProjectKey}'", returnStdout: true).trim()
                 def parsedQGResult = readJSON text: qualityGateResult
                 def status = parsedQGResult.projectStatus.status
