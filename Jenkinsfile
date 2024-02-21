@@ -4,7 +4,6 @@ pipeline {
 
      environment {
         FIN_SONAR= false
-         
         SONARQUBE_SCANNER = 'SonarJenkins'                //Nombre del scanner decidido en la configuracion de Jenkins
         SONAR_KEY = 'test'                                //Nombre del proyecto creado en SonarQube
         SONARHOSTURL = 'http://localhost:9000'            //direccion de sonarQube
@@ -87,29 +86,29 @@ pipeline {
                     def status = parsedQGResult.projectStatus.status
                     
                     // Consulta adicional para detalles de issues
-                    def issuesResult = sh(script: "curl -u $SONAR_TOKEN: '${SONARHOSTURL}/api/issues/search?projectKeys=${SONAR_KEY}&statuses=OPEN,REOPENED&types=BUG,VULNERABILITY,CODE_SMELL'", returnStdout: true).trim()
-                    def parsedIssuesResult = readJSON text: issuesResult
-                    def totalIssues = parsedIssuesResult.total
-                    def bugs = parsedIssuesResult.issues.findAll { it.type == 'BUG' }.size()
-                    def vulnerabilities = parsedIssuesResult.issues.findAll { it.type == 'VULNERABILITY' }.size()
-                    def codeSmells = parsedIssuesResult.issues.findAll { it.type == 'CODE_SMELL' }.size()
-    
+                    def issuesResult = sh(script: "curl -u $SONAR_TOKEN: '${SONARHOSTURL}/api/issues/search?componentKeys=${SONAR_KEY}&statuses=OPEN,REOPENED&resolved=false&types=BUG,VULNERABILITY,CODE_SMELL&resolved=false'", returnStdout: true).trim()
+                    def data = readJSON text: issuesResult
+                    def body = "Se han encontrado los siguientes issues en SonarQube:\n\n"
+                    if(data.total != 0){
+                    // Procesa cada issue de SonarQube y agrega la información al cuerpo
+                    data.issues.each { issue ->
+                       body += "- **Mensaje**: ${issue.message}  \n" +
+                        " *Archivo*: ${issue.component}  \n" +
+                        " *Línea*: ${issue.line ?: 'No especificado'} \n"+
+                        " *Regla*: ${issue.rule}  \n\n"
+                    }
+                    echo "${issuesResult }"
                     // Preparando el mensaje del issue con detalles del análisis
-                    def issueBody = """
-                    El análisis de SonarQube para el proyecto ha completado. Estado del Quality Gate: ${status}.
-                    Resumen de issues:
-                    - Total Issues: ${totalIssues}
-                    - Bugs: ${bugs}
-                    - Vulnerabilidades: ${vulnerabilities}
-                    - Code Smells: ${codeSmells}
-                    Por favor, revisa los detalles en SonarQube.
-                    """
+                    }else{
+                        body = "El codigo cumple con los requisitos de Sonarqube"
+                    }
                     def issueTitle = "Análisis de SonarQube completado con estado: ${status}"
                     withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                         def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: issueBody, labels: ["sonarqube"]])
+                         def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["sonarqube"]])
+                         writeFile file: 'temp.json', text: jsonBody
                          sh """
                          curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                                -d '${jsonBody}' \
+                                -d @temp.json \
                             https://api.github.com/repos/${user}/${repo}/issues
                             """
                         }
