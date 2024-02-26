@@ -9,7 +9,7 @@ pipeline {
         SONARHOSTURL = 'http://localhost:9000'            //direccion de sonarQube
         SONAR_ID = '6956b76d-aef1-488e-8b4f-a439bf3f07cc' //ID del token de SonarQube almacenado en Jenkins
         JENKINS_ID = 'TestingID'                          //ID del token de github en jenkins
-        
+        TEST_TIMEOUT = '1'
     }
     
     stages {
@@ -47,9 +47,11 @@ pipeline {
         //Ejecutamos los test de Junit
             steps {
                 script {
+                     timeout(time: env.TEST_TIMEOUT.toInteger(), unit: 'MINUTES') {
                     def classpath = sh(script: "find bin/ lib/ -type f \\( -name '*.class' -o -name '*.jar' \\) | sed 's|/[^/]*\$||' | sort -u | tr '\\n' ':'", returnStdout: true).trim()
                     sh "java -jar lib/junit-platform-console-standalone-1.7.0-all.jar -cp \"$classpath\" --scan-classpath --reports-dir=reports"
                     junit '**/reports/*.xml'
+                    }
                 }
             }
         }
