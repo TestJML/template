@@ -76,7 +76,7 @@ pipeline {
                 boolean finSonar = FIN_SONAR.toBoolean()
                 boolean finTimeout = FIN_TIMEOUT.toBoolean()
                 boolean finTest = FIN_TEST.toBoolean()
-                if(finSonar || finTimeout || finTest){
+              
                 // Extraer la información del usuario y el repositorio
                 def repoUrl = env.GIT_URL ?: ''
                 def user = ''
@@ -150,6 +150,7 @@ pipeline {
                         
                     }
                     if(finTest){
+                        //Sin errores
                         def issueTitle = "Analisis Jenkins"
                         def body = "El código a superado todos los casos de test"
                         withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
@@ -162,14 +163,15 @@ pipeline {
                             """
                             }
                     }
-                }    
+                
+                    
             }
         }
         failure {
             //Issue de JUnit
             script {
                 def reportFiles = findFiles(glob: 'reports/*.xml')
-                if (reportFiles.length > 0){
+                
                     // Extraer la información del usuario y el repositorio
                     def repoUrl = env.GIT_URL ?: ''
                     def user = ''
@@ -187,7 +189,7 @@ pipeline {
                     } else {
                         echo "GIT_URL no está definido."
                     }
-                    
+                if (reportFiles.length > 0){
                    withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]){
                         // Extraer líneas relevantes
                         def rawOutput = sh(script: "grep -E '<testcase|<failure' reports/*.xml", returnStdout: true).trim()
@@ -219,6 +221,21 @@ pipeline {
                             https://api.github.com/repos/${user}/${repo}/issues
                         """
                     }
+                }
+                if (fileExists('errores.log') && readFile('errores.log').trim()) {
+                    //Errores de compilacion
+                    def errores = readFile('errores.log').trim()
+                    def issueTitle = "Errores de compilación encontrados"
+                    def body = "Se han encontrado los siguientes errores durante la compilación:\n```\n${errores}\n```"
+                    withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["bug"]])
+                         writeFile file: 'temp.json', text: jsonBody
+                         sh """
+                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
+                                -d @temp.json \
+                            https://api.github.com/repos/${user}/${repo}/issues
+                            """
+                            }
                 }
             }
         }
