@@ -24,9 +24,9 @@ def createGitHubIssue(String repoUrl, String issueTitle, String body, String cre
                 """
                         }
                     }
-                }
+                
     
-}
+
 
 
 pipeline {
