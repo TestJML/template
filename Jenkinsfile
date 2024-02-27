@@ -178,7 +178,6 @@ pipeline {
                         echo "GIT_URL no está definido."
                     }
                 if (reportFiles.length > 0){
-                   withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]){
                         // Extraer líneas relevantes
                         def rawOutput = sh(script: "grep -E '<testcase|<failure' reports/*.xml", returnStdout: true).trim()
     
@@ -200,30 +199,16 @@ pipeline {
     
                         def issueTitle = "Error encontrado en Jenkins"
                         def issueBody = "Se encontraron los siguientes errores durante la ejecución:\n```\n${testsFallidos.join('\n')}\n```"
-    
-                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: issueBody, labels: ["bug"]])
-    
-                        sh """
-                        curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                            -d '${jsonBody}' \
-                            https://api.github.com/repos/${user}/${repo}/issues
-                        """
-                    }
+
+                        createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "bug")
+                        
                 }
                 if (fileExists('errores.log') && readFile('errores.log').trim()) {
                     //Errores de compilacion
                     def errores = readFile('errores.log').trim()
                     def issueTitle = "Errores de compilación encontrados"
                     def body = "Se han encontrado los siguientes errores durante la compilación:\n```\n${errores}\n```"
-                    withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["bug"]])
-                         writeFile file: 'temp.json', text: jsonBody
-                         sh """
-                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                                -d @temp.json \
-                            https://api.github.com/repos/${user}/${repo}/issues
-                            """
-                            }
+                    createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "bug")
                 }
             }
         }
