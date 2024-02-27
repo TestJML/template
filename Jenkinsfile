@@ -49,7 +49,9 @@ pipeline {
                 script {
                      timeout(time: env.TEST_TIMEOUT.toInteger(), unit: 'MINUTES') {
                     def classpath = sh(script: "find bin/ lib/ -type f \\( -name '*.class' -o -name '*.jar' \\) | sed 's|/[^/]*\$||' | sort -u | tr '\\n' ':'", returnStdout: true).trim()
-                    sh "java -jar lib/junit-platform-console-standalone-1.7.0-all.jar -cp \"$classpath\" --scan-classpath --reports-dir=reports"
+                    echo "Classpath: $classpath"
+                    sh "find bin/ -type f -name '*.class'"
+                    sh 'java -cp "lib/*:bin/" org.junit.platform.console.ConsoleLauncher --scan-classpath --reports-dir=reports'
                     junit '**/reports/*.xml'
                     }
                 }
