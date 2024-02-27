@@ -106,7 +106,7 @@ pipeline {
                     }else{
                         body = "El codigo cumple con los requisitos de Sonarqube"
                     }
-                    def issueTitle = "Análisis de SonarQube completado con estado: ${status}"
+                    def issueTitle = "Análisis de SonarQube"
                     withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
                          def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["sonarqube"]])
                          writeFile file: 'temp.json', text: jsonBody
