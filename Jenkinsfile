@@ -3,13 +3,17 @@ pipeline {
     agent any
 
      environment {
-        FIN_SONAR= false
         SONARQUBE_SCANNER = 'SonarJenkins'                //Nombre del scanner decidido en la configuracion de Jenkins
         SONAR_KEY = 'test'                                //Nombre del proyecto creado en SonarQube
         SONARHOSTURL = 'http://localhost:9000'            //direccion de sonarQube
         SONAR_ID = '6956b76d-aef1-488e-8b4f-a439bf3f07cc' //ID del token de SonarQube almacenado en Jenkins
         JENKINS_ID = 'TestingID'                          //ID del token de github en jenkins
-        TEST_TIMEOUT = '1'
+        TEST_TIMEOUT = '1'                                //Tiempo maximo para la etapa de Test
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //variables
+        FIN_SONAR= false
+        FIN_TIMEOUT= false
+        FIN_TEST = false
     }
     
     stages {
@@ -38,7 +42,7 @@ pipeline {
                   def scannerHome = tool 'SonarScanner'
                  withSonarQubeEnv(SONARQUBE_SCANNER) { 
                      sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=${SONAR_KEY} -Dsonar.java.binaries=$WORKSPACE/bin"
-                     FIN_SONAR = true
+                     FIN_SONAR = "true"
                     }
                 }
             }
@@ -47,12 +51,17 @@ pipeline {
         //Ejecutamos los test de Junit
             steps {
                 script {
+                    try{
                      timeout(time: env.TEST_TIMEOUT.toInteger(), unit: 'MINUTES') {
                     def classpath = sh(script: "find bin/ lib/ -type f \\( -name '*.class' -o -name '*.jar' \\) | sed 's|/[^/]*\$||' | sort -u | tr '\\n' ':'", returnStdout: true).trim()
-                    echo "Classpath: $classpath"
                     sh "find bin/ -type f -name '*.class'"
                     sh 'java -cp "lib/*:bin/" org.junit.platform.console.ConsoleLauncher --scan-classpath --reports-dir=reports'
                     junit '**/reports/*.xml'
+                    FIN_TEST = "true"
+                    }
+                    }catch (e) {
+                        FIN_TIMEOUT= "true"
+                        throw e
                     }
                 }
             }
@@ -64,7 +73,10 @@ pipeline {
         always {
             //Issue de SonarQube
             script {
-                if(FIN_SONAR){
+                boolean finSonar = FIN_SONAR.toBoolean()
+                boolean finTimeout = FIN_TIMEOUT.toBoolean()
+                boolean finTest = FIN_TEST.toBoolean()
+                if(finSonar || finTimeout || finTest){
                 // Extraer la información del usuario y el repositorio
                 def repoUrl = env.GIT_URL ?: ''
                 def user = ''
@@ -82,6 +94,7 @@ pipeline {
                         } else {
                             echo "GIT_URL no está definido."
                         }
+                    if(finSonar){
                 withCredentials([string(credentialsId: "${SONAR_ID}", variable: 'SONAR_TOKEN')]) {
                     // Consulta la API de SonarQube para obtener el estado del quality gate
                     def taskId = waitForQualityGate()
@@ -101,7 +114,6 @@ pipeline {
                         " *Línea*: ${issue.line ?: 'No especificado'} \n"+
                         " *Regla*: ${issue.rule}  \n\n"
                     }
-                    echo "${issuesResult }"
                     // Preparando el mensaje del issue con detalles del análisis
                     }else{
                         body = "El codigo cumple con los requisitos de Sonarqube"
@@ -115,7 +127,40 @@ pipeline {
                                 -d @temp.json \
                             https://api.github.com/repos/${user}/${repo}/issues
                             """
+                            }
                         }
+                    }
+                    if(finTimeout){
+
+                        def issueTitle = "Error en ejecucion"
+                        def body = "La ejecución superó el tiempo límite de ${TEST_TIMEOUT} minuto"
+                        if (TEST_TIMEOUT!='1'){
+                            body += "s"
+                        }
+                        body += "\n Posible bucle infinito"
+                        withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                         def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["bug"]])
+                         writeFile file: 'temp.json', text: jsonBody
+                         sh """
+                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
+                                -d @temp.json \
+                            https://api.github.com/repos/${user}/${repo}/issues
+                            """
+                            }
+                        
+                    }
+                    if(finTest){
+                        def issueTitle = "Analisis Jenkins"
+                        def body = "El código a superado todos los casos de test"
+                        withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["ok"]])
+                         writeFile file: 'temp.json', text: jsonBody
+                         sh """
+                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
+                                -d @temp.json \
+                            https://api.github.com/repos/${user}/${repo}/issues
+                            """
+                            }
                     }
                 }    
             }
