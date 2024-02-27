@@ -1,5 +1,4 @@
 def createGitHubIssue(String repoUrl, String issueTitle, String body, String credentialsId, String label) {
-    def repoUrl = env.GIT_URL ?: ''
     def user = ''
     def repo = ''
         if (repoUrl) {
