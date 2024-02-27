@@ -1,3 +1,33 @@
+def createGitHubIssue(String repoUrl, String issueTitle, String body, String credentialsId, String label) {
+    def repoUrl = env.GIT_URL ?: ''
+    def user = ''
+    def repo = ''
+        if (repoUrl) {
+            def pattern = ~/https:\/\/github\.com\/([^\/]+)\/([^\.]+)\.git/
+            def matcher = pattern.matcher(repoUrl)
+            if (matcher.matches()) {
+                user = matcher.group(1)
+                repo = matcher.group(2)
+            } else {
+                echo "No se pudo extraer la información del repositorio."
+                }
+        } else {
+            echo "GIT_URL no está definido."
+            }
+    withCredentials([usernamePassword(credentialsId: credentialsId, usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+            def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: [label]])
+            writeFile file: 'temp.json', text: jsonBody
+            sh """
+                curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
+                    -d @temp.json \
+                https://api.github.com/repos/${user}/${repo}/issues
+                """
+                        }
+                    }
+                }
+    
+}
+
 
 pipeline {
     agent any
@@ -77,23 +107,6 @@ pipeline {
                 boolean finTimeout = FIN_TIMEOUT.toBoolean()
                 boolean finTest = FIN_TEST.toBoolean()
               
-                // Extraer la información del usuario y el repositorio
-                def repoUrl = env.GIT_URL ?: ''
-                def user = ''
-                def repo = ''
-                    if (repoUrl) {
-                        def pattern = ~/https:\/\/github\.com\/([^\/]+)\/([^\.]+)\.git/
-                        def matcher = pattern.matcher(repoUrl)
-                            if (matcher.matches()) {
-                                user = matcher.group(1)
-                                repo = matcher.group(2)
-                       
-                        } else {
-                            echo "No se pudo extraer la información del repositorio."
-                        }
-                        } else {
-                            echo "GIT_URL no está definido."
-                        }
                     if(finSonar){
                 withCredentials([string(credentialsId: "${SONAR_ID}", variable: 'SONAR_TOKEN')]) {
                     // Consulta la API de SonarQube para obtener el estado del quality gate
@@ -119,15 +132,7 @@ pipeline {
                         body = "El codigo cumple con los requisitos de Sonarqube"
                     }
                     def issueTitle = "Análisis de SonarQube"
-                    withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                         def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["sonarqube"]])
-                         writeFile file: 'temp.json', text: jsonBody
-                         sh """
-                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                                -d @temp.json \
-                            https://api.github.com/repos/${user}/${repo}/issues
-                            """
-                            }
+                    createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "sonarqube")
                         }
                     }
                     if(finTimeout){
@@ -138,30 +143,14 @@ pipeline {
                             body += "s"
                         }
                         body += "\n Posible bucle infinito"
-                        withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                         def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["bug"]])
-                         writeFile file: 'temp.json', text: jsonBody
-                         sh """
-                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                                -d @temp.json \
-                            https://api.github.com/repos/${user}/${repo}/issues
-                            """
-                            }
+                        createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "bug")
                         
                     }
                     if(finTest){
                         //Sin errores
                         def issueTitle = "Analisis Jenkins"
                         def body = "El código a superado todos los casos de test"
-                        withCredentials([usernamePassword(credentialsId: "${JENKINS_ID}", usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
-                        def jsonBody = groovy.json.JsonOutput.toJson([title: issueTitle, body: body, labels: ["ok"]])
-                         writeFile file: 'temp.json', text: jsonBody
-                         sh """
-                         curl -u "\$GITHUB_USER:\$GITHUB_TOKEN" -X POST \
-                                -d @temp.json \
-                            https://api.github.com/repos/${user}/${repo}/issues
-                            """
-                            }
+                        createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "ok")
                     }
                 
                     
