@@ -21,12 +21,8 @@ def createGitHubIssue(String repoUrl, String issueTitle, String body, String cre
                     -d @temp.json \
                 https://api.github.com/repos/${user}/${repo}/issues
                 """
-                        }
-                    }
-                
-    
-
-
+    }
+}
 
 pipeline {
     agent any
@@ -37,7 +33,7 @@ pipeline {
         SONARHOSTURL = 'http://localhost:9000'            //direccion de sonarQube
         SONAR_ID = '6956b76d-aef1-488e-8b4f-a439bf3f07cc' //ID del token de SonarQube almacenado en Jenkins
         JENKINS_ID = 'TestingID'                          //ID del token de github en jenkins
-        TEST_TIMEOUT = '1'                                //Tiempo maximo para la etapa de Test
+        TEST_TIMEOUT = '2'                                //Tiempo maximo para la etapa de Test
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //variables
         FIN_SONAR= false
@@ -89,7 +85,9 @@ pipeline {
                     FIN_TEST = "true"
                     }
                     }catch (e) {
-                        FIN_TIMEOUT= "true"
+                        if (e.toString().contains("TimeoutException") || e.getMessage().contains("time out")) {
+                            FIN_TIMEOUT = "true"
+                        }
                         throw e
                     }
                 }
@@ -107,7 +105,7 @@ pipeline {
                 boolean finTest = FIN_TEST.toBoolean()
               
                     if(finSonar){
-                withCredentials([string(credentialsId: "${SONAR_ID}", variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: "${SONAR_ID}", variable: 'SONAR_TOKEN')]) {
                     // Consulta la API de SonarQube para obtener el estado del quality gate
                     def taskId = waitForQualityGate()
                     def qualityGateResult = sh(script: "curl -u $SONAR_TOKEN: '${SONARHOSTURL}/api/qualitygates/project_status?projectKey=${SONAR_KEY}'", returnStdout: true).trim()
@@ -135,7 +133,7 @@ pipeline {
                         }
                     }
                     if(finTimeout){
-
+                        echo FIN_TIMEOUT
                         def issueTitle = "Error en ejecucion"
                         def body = "La ejecución superó el tiempo límite de ${TEST_TIMEOUT} minuto"
                         if (TEST_TIMEOUT!='1'){
@@ -198,7 +196,7 @@ pipeline {
                         }
     
                         def issueTitle = "Error encontrado en Jenkins"
-                        def issueBody = "Se encontraron los siguientes errores durante la ejecución:\n```\n${testsFallidos.join('\n')}\n```"
+                        def body = "Se encontraron los siguientes errores durante la ejecución:\n```\n${testsFallidos.join('\n')}\n```"
 
                         createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "bug")
                         
