@@ -33,7 +33,7 @@ pipeline {
         SONARHOSTURL = 'http://localhost:9000'            //direccion de sonarQube
         SONAR_ID = '6956b76d-aef1-488e-8b4f-a439bf3f07cc' //ID del token de SonarQube almacenado en Jenkins
         JENKINS_ID = 'TestingID'                          //ID del token de github en jenkins
-        TEST_TIMEOUT = '2'                                //Tiempo maximo para la etapa de Test
+        TEST_TIMEOUT = '1'                                //Tiempo maximo para la etapa de Test
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //variables
         FIN_SONAR= false
@@ -85,9 +85,11 @@ pipeline {
                     FIN_TEST = "true"
                     }
                     }catch (e) {
-                        if (e.toString().contains("TimeoutException") || e.getMessage().contains("time out")) {
+                        
+                        if (e.toString() == "org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" ){
                             FIN_TIMEOUT = "true"
                         }
+                        //echo e.toString()
                         throw e
                     }
                 }
