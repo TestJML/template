@@ -118,6 +118,8 @@ pipeline {
                     def issuesResult = sh(script: "curl -u $SONAR_TOKEN: '${SONARHOSTURL}/api/issues/search?componentKeys=${SONAR_KEY}&statuses=OPEN,REOPENED&resolved=false&types=BUG,VULNERABILITY,CODE_SMELL&resolved=false'", returnStdout: true).trim()
                     def data = readJSON text: issuesResult
                     def body = "Se han encontrado los siguientes issues en SonarQube:\n\n"
+                    def issueTitle = "Análisis de SonarQube"
+                    def Etiqueta = "sonarqube"
                     if(data.total != 0){
                     // Procesa cada issue de SonarQube y agrega la información al cuerpo
                     data.issues.each { issue ->
@@ -126,12 +128,14 @@ pipeline {
                         " *Línea*: ${issue.line ?: 'No especificado'} \n"+
                         " *Regla*: ${issue.rule}  \n\n"
                     }
+                    issueTitle = "Errores detectados en SonarQube"
+                    Etiqueta = "Issue sonarqube"
                     // Preparando el mensaje del issue con detalles del análisis
                     }else{
                         body = "El codigo cumple con los requisitos de Sonarqube"
                     }
-                    def issueTitle = "Análisis de SonarQube"
-                    createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "sonarqube")
+                    
+                    createGitHubIssue(env.GIT_URL, issueTitle, body, "${JENKINS_ID}", "${Etiqueta}")
                         }
                     }
                     if(finTimeout){
